@@ -10,7 +10,7 @@ import org.jspecify.annotations.NonNull;
 public abstract class Executor <ProtoRequest, ProtoResponse> {
   private  final int MAX_ATTEMPTS = 10;
 
-  protected abstract MethodDescriptor<ProtoRequest, ProtoResponse> getMethod();
+  protected abstract MethodDescriptor<ProtoRequest, ProtoResponse> getMethodDescriptor();
 
   protected abstract ProtoRequest buildRequest();
   protected abstract ExecutionState getExecutionState(ProtoResponse response);
@@ -22,7 +22,7 @@ public abstract class Executor <ProtoRequest, ProtoResponse> {
       final var channel = client.getNode().getChannel();
 
       final var response = ClientCalls.blockingUnaryCall(
-        channel.newCall(this.getMethod(), CallOptions.DEFAULT),
+        channel.newCall(this.getMethodDescriptor(), CallOptions.DEFAULT),
         request
       );
 
@@ -32,14 +32,16 @@ public abstract class Executor <ProtoRequest, ProtoResponse> {
         case FINISH -> {
           return response;
         }
-
         case RETRY -> {
+          client.getNetwork().selectNode();
           continue;
         }
-
-        case EXPIRED -> throw new RuntimeException("Transaction Expired");
-
-        case FAIL -> throw new RuntimeException("Transaction Fail");
+        case EXPIRED -> {
+          throw new RuntimeException("Transaction Expired");
+        }
+        case FAIL -> {
+          throw new RuntimeException("Transaction Fail");
+        }
       }
     }
 

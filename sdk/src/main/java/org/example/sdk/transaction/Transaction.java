@@ -66,7 +66,7 @@ public abstract class Transaction <T extends Transaction<T>> {
       client,
       transactionBodyBuilder.build(),
       this::fromProto,
-      this::getMethodDescriptor
+      getMethodDescriptor()
     );
   }
 }

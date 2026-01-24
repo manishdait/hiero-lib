@@ -14,6 +14,7 @@ import org.example.sdk.transaction.TransactionId;
 import org.example.sdk.transaction.TransactionReceipt;
 import org.jspecify.annotations.NonNull;
 
+import java.util.List;
 import java.util.Objects;
 
 public class TransactionReceiptQuery extends Query {
@@ -52,7 +53,12 @@ public class TransactionReceiptQuery extends Query {
   }
 
   @Override
-  public com.hedera.hashgraph.sdk.proto.Query toProto(@NonNull final Client client) {
+  protected boolean requiredPayment() {
+    return false;
+  }
+
+  @Override
+  public com.hedera.hashgraph.sdk.proto.Query toProto() {
     var receiptQuery = TransactionGetReceiptQuery.newBuilder()
       .setTransactionID(this.transactionId.toProto())
       .setIncludeChildReceipts(this.includeChildren)
@@ -78,12 +84,21 @@ public class TransactionReceiptQuery extends Query {
 
   public TransactionReceipt query(@NonNull final Client client) {
     Objects.requireNonNull(client, "client must not be null");
+    this.doPreQueryCheck(client);
 
-    var receipt = this.performQuery(client).getTransactionGetReceipt().getReceipt();
+    var receipt = this.execute(client).getTransactionGetReceipt().getReceipt();
 
-    for (int i = 0; i < MAX_ATTEMPTS; i++) {
-      if (shouldRetry(receipt.getStatus())) {
-        receipt = this.performQuery(client).getTransactionGetReceipt().getReceipt();
+    final var retryable = List.of(
+      Status.UNKNOWN,
+      Status.BUSY,
+      Status.RECEIPT_NOT_FOUND,
+      Status.RECORD_NOT_FOUND,
+      Status.PLATFORM_NOT_ACTIVE
+    );
+
+    for (int i = 0; i < 10; i++) {
+      if (retryable.contains(Status.valueOf(receipt.getStatus()))) {
+        receipt = this.execute(client).getTransactionGetReceipt().getReceipt();
         continue;
       }
 

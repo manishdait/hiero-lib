@@ -32,22 +32,21 @@ public class AccountBalanceQuery extends Query {
   }
 
   @Override
+  protected boolean requiredPayment() {
+    return false;
+  }
+
+  @Override
   protected ResponseHeader getResponseHeader(@NonNull final Response response) {
     Objects.requireNonNull(response, "response must not be null");
     return response.getCryptogetAccountBalance().getHeader();
   }
 
   @Override
-  public com.hedera.hashgraph.sdk.proto.Query toProto(@NonNull final Client client) {
-    Objects.requireNonNull(client, "client must not be null");
-
+  public com.hedera.hashgraph.sdk.proto.Query toProto() {
     var query = CryptoGetAccountBalanceQuery.newBuilder()
       .setAccountID(this.accountId.toProto())
-      .setHeader(
-        QueryHeader.newBuilder()
-          .setResponseType(ResponseType.ANSWER_ONLY)
-          .build()
-      )
+      .setHeader(this.queryHeader)
       .build();
 
     return com.hedera.hashgraph.sdk.proto.Query.newBuilder()
@@ -62,8 +61,9 @@ public class AccountBalanceQuery extends Query {
 
   public AccountBalance query(@NonNull Client client) {
     Objects.requireNonNull(client, "client must not be null");
+    this.doPreQueryCheck(client);
 
-    var proto = this.performQuery(client).getCryptogetAccountBalance();
+    var proto = this.execute(client).getCryptogetAccountBalance();
     return AccountBalance.fromProto(proto);
   }
 }

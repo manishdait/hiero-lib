@@ -28,21 +28,21 @@ public class PackedTransaction<T extends Transaction<T>> extends
   Executor<com.hedera.hashgraph.sdk.proto.Transaction, TransactionResponse> {
   private final TransactionBody transactionBody;
   private final Function<TransactionBody, T> unpacker;
-  private final Supplier<MethodDescriptor<com.hedera.hashgraph.sdk.proto.Transaction, TransactionResponse>> method;
+  private final MethodDescriptor<com.hedera.hashgraph.sdk.proto.Transaction, TransactionResponse> methodDescriptor;
   private final Client client;
 
   private final Map<PublicKey, byte[]> signatures = new HashMap<>();
 
   protected PackedTransaction(
-    @NonNull Client client,
+    @NonNull final Client client,
     @NonNull final TransactionBody transactionBody,
     @NonNull final Function<TransactionBody,T> unpacker,
-    @NonNull final Supplier<MethodDescriptor<com.hedera.hashgraph.sdk.proto.Transaction, TransactionResponse>> method
+    @NonNull final MethodDescriptor<com.hedera.hashgraph.sdk.proto.Transaction, TransactionResponse> methodDescriptor
   ) {
     this.client = client;
     this.transactionBody = transactionBody;
     this.unpacker = unpacker;
-    this.method = method;
+    this.methodDescriptor = methodDescriptor;
   }
 
   public T unpack() {
@@ -60,7 +60,7 @@ public class PackedTransaction<T extends Transaction<T>> extends
   }
 
   private SignatureMap buildSignatureMap() {
-    final SignatureMap.Builder signatureMapBuilder = SignatureMap.newBuilder();
+    final var signatureMapBuilder = SignatureMap.newBuilder();
 
     for (PublicKey key : signatures.keySet()) {
       if (key.getType() == KeyType.ED25519) {
@@ -111,8 +111,8 @@ public class PackedTransaction<T extends Transaction<T>> extends
   }
 
   @Override
-  protected MethodDescriptor<com.hedera.hashgraph.sdk.proto.Transaction, TransactionResponse> getMethod() {
-    return this.method.get();
+  protected MethodDescriptor<com.hedera.hashgraph.sdk.proto.Transaction, TransactionResponse> getMethodDescriptor() {
+    return this.methodDescriptor;
   }
 
   public org.example.sdk.transaction.TransactionResponse send() {

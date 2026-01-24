@@ -1,30 +1,122 @@
 package org.example.sdk.query;
 
+import com.google.protobuf.ByteString;
+import com.hedera.hashgraph.sdk.proto.AccountAmount;
+import com.hedera.hashgraph.sdk.proto.CryptoTransferTransactionBody;
+import com.hedera.hashgraph.sdk.proto.Duration;
+import com.hedera.hashgraph.sdk.proto.QueryHeader;
 import com.hedera.hashgraph.sdk.proto.Response;
-import com.hedera.hashgraph.sdk.proto.ResponseCodeEnum;
 import com.hedera.hashgraph.sdk.proto.ResponseHeader;
 
-import io.grpc.CallOptions;
+import com.hedera.hashgraph.sdk.proto.ResponseType;
+import com.hedera.hashgraph.sdk.proto.SignatureMap;
+import com.hedera.hashgraph.sdk.proto.SignaturePair;
+import com.hedera.hashgraph.sdk.proto.SignedTransaction;
+import com.hedera.hashgraph.sdk.proto.Timestamp;
+import com.hedera.hashgraph.sdk.proto.Transaction;
+import com.hedera.hashgraph.sdk.proto.TransactionBody;
+import com.hedera.hashgraph.sdk.proto.TransactionID;
+import com.hedera.hashgraph.sdk.proto.TransferList;
 import io.grpc.MethodDescriptor;
-import io.grpc.stub.ClientCalls;
 import org.example.sdk.Client;
+import org.example.sdk.Hbar;
+import org.example.sdk.HbarUnit;
 import org.example.sdk.Status;
+import org.example.sdk.internal.Executor;
+import org.example.sdk.internal.utils.ExecutionState;
 import org.jspecify.annotations.NonNull;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 
-public abstract class Query {
-  protected static final int MAX_ATTEMPTS = 10;
+public abstract class Query extends Executor<com.hedera.hashgraph.sdk.proto.Query, Response> {
+  protected QueryHeader queryHeader;
+  protected Hbar cost = Hbar.of(0);
 
-  protected abstract ResponseHeader getResponseHeader(final Response response);
-  public abstract com.hedera.hashgraph.sdk.proto.Query toProto(@NonNull final Client client);
+  public abstract com.hedera.hashgraph.sdk.proto.Query toProto();
   protected abstract MethodDescriptor<com.hedera.hashgraph.sdk.proto.Query, Response> getMethodDescriptor();
 
-  protected boolean shouldRetry(@NonNull final ResponseCodeEnum responseCodeEnum) {
-    Objects.requireNonNull(responseCodeEnum, "responseCodeEnum must not be null");
+  protected abstract ResponseHeader getResponseHeader(final Response response);
 
-    final List<Status> RETRYABLE_RESPONSE = List.of(
+  protected boolean requiredPayment() {
+    return true;
+  }
+
+  private Transaction preparePayment(@NonNull final Client client, @NonNull final Hbar cost) {
+    CryptoTransferTransactionBody cryptoTx = CryptoTransferTransactionBody.newBuilder()
+      .setTransfers(
+        TransferList.newBuilder()
+          .addAccountAmounts(
+            AccountAmount.newBuilder()
+              .setAccountID(client.getOperatorAccount().accountId().toProto())
+              .setAmount(-cost.tinybars())
+          )
+          .addAccountAmounts(
+            AccountAmount.newBuilder()
+              .setAccountID(client.getNode().getAccountId().toProto())
+              .setAmount(cost.tinybars())
+          )
+          .build()
+      ).build();
+
+    TransactionBody txBody = TransactionBody.newBuilder()
+      .setTransactionID(
+        TransactionID.newBuilder()
+          .setAccountID(client.getOperatorAccount().accountId().toProto())
+          .setTransactionValidStart(
+            Timestamp.newBuilder()
+              .setSeconds(Instant.now().getEpochSecond())
+              .setNanos(Instant.now().getNano())
+          )
+      )
+      .setNodeAccountID(client.getNode().getAccountId().toProto())
+      .setTransactionFee(100_000_000)
+      .setTransactionValidDuration(Duration.newBuilder().setSeconds(120))
+      .setCryptoTransfer(cryptoTx)
+      .build();
+
+    byte[] bodyBytes = txBody.toByteArray();
+    byte[] signature = client.getOperatorAccount().privateKey().sign(bodyBytes);
+
+    SignedTransaction signedTx = SignedTransaction.newBuilder()
+      .setBodyBytes(ByteString.copyFrom(bodyBytes))
+      .setSigMap(
+        SignatureMap.newBuilder()
+          .addSigPair(
+            SignaturePair.newBuilder()
+              .setPubKeyPrefix(ByteString.copyFrom(client.getOperatorAccount().privateKey().getPublicKey().getBytes()))
+              .setEd25519(ByteString.copyFrom(signature))
+          )
+      )
+      .build();
+
+    return Transaction.newBuilder()
+      .setSignedTransactionBytes(signedTx.toByteString())
+      .build();
+  }
+
+  protected void doPreQueryCheck(@NonNull final Client client) {
+    if (requiredPayment()) {
+      queryHeader = QueryHeader.newBuilder().setResponseType(ResponseType.COST_ANSWER).build();
+      var response = execute(client);
+
+      cost = Hbar.of(getResponseHeader(response).getCost(), HbarUnit.TINYBAR);
+    }
+
+    var queryHeaderBuilder = QueryHeader.newBuilder()
+      .setResponseType(ResponseType.ANSWER_ONLY);
+
+    if (cost.tinybars() > 0) {
+      queryHeaderBuilder.setPayment(preparePayment(client, cost));
+    }
+
+    queryHeader = queryHeaderBuilder.build();
+  }
+
+  @Override
+  protected ExecutionState getExecutionState(Response queryResponse) {
+    final var retryable = List.of(
       Status.UNKNOWN,
       Status.BUSY,
       Status.RECEIPT_NOT_FOUND,
@@ -32,28 +124,16 @@ public abstract class Query {
       Status.PLATFORM_NOT_ACTIVE
     );
 
-    return RETRYABLE_RESPONSE.contains(Status.valueOf(responseCodeEnum));
+    final var status = Status.valueOf(getResponseHeader(queryResponse).getNodeTransactionPrecheckCode());
+
+    if (status == Status.OK) return ExecutionState.FINISH;
+    if (retryable.contains(status)) return ExecutionState.RETRY;
+
+    return ExecutionState.FAIL;
   }
 
-  protected Response performQuery(@NonNull final Client client) {
-    Objects.requireNonNull(client, "client must not be null");
-
-    for (int i = 0; i <= MAX_ATTEMPTS; i++) {
-      var call = client.getNode().getChannel().newCall(this.getMethodDescriptor(), CallOptions.DEFAULT);
-      var response = ClientCalls.blockingUnaryCall(call, this.toProto(client));
-
-      var header = getResponseHeader(response);
-      if (Status.fromResponseCode(header.getNodeTransactionPrecheckCode().getNumber()) == Status.OK) {
-        return response;
-      }
-
-      if (!shouldRetry(header.getNodeTransactionPrecheckCode())) {
-        throw new RuntimeException("Fail to query receipt status " + Status.valueOf(header.getNodeTransactionPrecheckCode()).toString());
-      }
-
-      client.getNetwork().selectNode();
-    }
-
-    throw new RuntimeException("Fail to get query result timeout");
+  @Override
+  protected com.hedera.hashgraph.sdk.proto.Query buildRequest() {
+    return this.toProto();
   }
 }
