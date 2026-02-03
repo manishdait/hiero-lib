@@ -1,7 +1,10 @@
 package org.example.sdk;
 
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
 import org.example.sdk.account.Account;
 import org.example.sdk.account.AccountId;
+import org.example.sdk.internal.Config;
 import org.example.sdk.key.PrivateKey;
 import org.example.sdk.network.Network;
 import org.example.sdk.network.NetworkType;
@@ -14,9 +17,15 @@ public class Client {
   private Account operatorAccount;
   private final Network network;
 
+  private final ManagedChannel mirrorChannel;
+
   private Client(@NonNull final Network network) {
     Objects.requireNonNull(network, "network must not be null");
     this.network = network;
+
+    this.mirrorChannel = ManagedChannelBuilder
+      .forTarget(Config.MIRROR_NODE_ADDRESS.get(network.getNetworkType()))
+      .build();
   };
 
   public @NonNull static Client forTestnet() {
@@ -64,5 +73,9 @@ public class Client {
 
   public @NonNull Network getNetwork() {
     return this.network;
+  }
+
+  public  @NonNull ManagedChannel getMirrorChannel() {
+    return this.mirrorChannel;
   }
 }

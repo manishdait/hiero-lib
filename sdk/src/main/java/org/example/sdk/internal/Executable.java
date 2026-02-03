@@ -8,8 +8,6 @@ import org.example.sdk.internal.utils.ExecutionState;
 import org.jspecify.annotations.NonNull;
 
 public abstract class Executable <ProtoRequest, ProtoResponse> {
-  private final int MAX_ATTEMPTS = 10;
-
   protected abstract MethodDescriptor<ProtoRequest, ProtoResponse> getMethodDescriptor();
 
   protected abstract ProtoRequest buildRequest();
@@ -18,7 +16,7 @@ public abstract class Executable <ProtoRequest, ProtoResponse> {
   public ProtoResponse execute(@NonNull final Client client) {
     final var request = this.buildRequest();
 
-    for (int i = 0; i < this.MAX_ATTEMPTS; i++) {
+    for (int i = 0; i < Config.MAX_ATTEMPTS; i++) {
       final var channel = client.getNode().getChannel();
 
       final var response = ClientCalls.blockingUnaryCall(
