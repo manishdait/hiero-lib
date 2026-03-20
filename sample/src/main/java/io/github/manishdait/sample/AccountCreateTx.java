@@ -2,8 +2,10 @@ package io.github.manishdait.sample;
 
 import io.github.cdimascio.dotenv.Dotenv;
 import io.github.manishdait.sdk.Client;
+import io.github.manishdait.sdk.account.AccountCreateTransaction;
 import io.github.manishdait.sdk.account.AccountId;
 import io.github.manishdait.sdk.key.PrivateKey;
+import io.github.manishdait.sdk.transaction.PackedTransaction;
 import io.github.manishdait.sdk.transaction.TransactionReceipt;
 import io.github.manishdait.sdk.transaction.TransactionResponse;
 
@@ -16,13 +18,14 @@ public class AccountCreateTx {
         AccountId.fromString(dotenv.get("HIERO_ACCOUNT_ID")),
         PrivateKey.fromString(dotenv.get("HIERO_PRIVATE_KEY")));
 
-    TransactionResponse transactionResponse =
+    PackedTransaction<AccountCreateTransaction> transaction =
         new io.github.manishdait.sdk.account.AccountCreateTransaction()
             .withKey(PrivateKey.generate())
             .withInitialBalance(1)
             .withMemo("Test SDK")
-            .pack(client)
-            .send();
+            .pack(client);
+
+    TransactionResponse transactionResponse = transaction.send();
 
     TransactionReceipt receipt = transactionResponse.queryReceipt();
     System.out.println(receipt);

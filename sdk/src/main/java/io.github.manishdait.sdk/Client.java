@@ -3,6 +3,7 @@ package io.github.manishdait.sdk;
 import io.github.manishdait.sdk.account.Account;
 import io.github.manishdait.sdk.account.AccountId;
 import io.github.manishdait.sdk.internal.Config;
+import io.github.manishdait.sdk.internal.network.NetworkConstant;
 import io.github.manishdait.sdk.key.PrivateKey;
 import io.github.manishdait.sdk.network.Network;
 import io.github.manishdait.sdk.network.NetworkType;
@@ -29,10 +30,12 @@ public class Client {
 
     this.network = network;
     this.mirrorChannel =
-        ManagedChannelBuilder.forTarget(Config.MIRROR_NODE_ADDRESS.get(network.getNetworkType()))
-            .build();
+      ManagedChannelBuilder.forTarget(Config.MIRROR_NODE_ADDRESS.get(network.getNetworkType()))
+        .build();
 
-    this.network.setNodes(this);
+    if (network.getNetworkType() != NetworkType.SOLO) {
+      this.network.setNodes(this);
+    }
   }
   ;
 
@@ -64,12 +67,18 @@ public class Client {
   }
 
   /**
-   * Create a client for solo.
+   * Create a client form env var.
    *
    * @return the new instance of {@code Client}
    */
-  public @NonNull static Client forSolo() {
-    return new Client(new Network(NetworkType.SOLO));
+  public @NonNull static Client fromEnv() {
+    String accountId = System.getenv("HIERO_ACCOUNT_ID");
+    String privateKey = System.getenv("HIERO_PRIVATE_KEY");
+
+    Client client = new Client(new Network(NetworkType.SOLO));
+    client.setOperatorAccount(AccountId.fromString(accountId), PrivateKey.fromString(privateKey));
+    client.network.setNodes(NetworkConstant.DEFAULT_NODES.get(NetworkType.SOLO));
+    return client;
   }
 
   /**

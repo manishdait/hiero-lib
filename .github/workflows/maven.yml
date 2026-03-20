@@ -11,6 +11,12 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3
 
+      - name: Prepare Hiero Solo
+        id: solo
+        uses: hiero-ledger/hiero-solo-action@4d42a74e8e644a2753f3bb7a2afa429305375b14
+        with:
+          installMirrorNode: true
+
       - name: Set up JDK 21
         uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165
         with:
@@ -19,5 +25,8 @@ jobs:
           cache: "maven"
 
       - name: Build with Maven
+        env:
+          HIERO_ACCOUNT_ID: ${{ steps.solo.outputs.accountId }}
+          HIERO_PRIVATE_KEY: ${{ steps.solo.outputs.privateKey }}
         run: |
           ./mvnw -B verify

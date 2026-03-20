@@ -41,6 +41,11 @@ public class Network {
     return getNode();
   }
 
+  public void setNodes(@NonNull final List<Node> nodes) {
+    this.nodes.addAll(nodes);
+    this.proxies.put(nodes.get(0).getAccountId(), nodes);
+  }
+
   public void setNodes(@NonNull final Client client) {
     Objects.requireNonNull(client, "client must not be null");
     this.nodes.clear();
