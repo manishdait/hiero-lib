@@ -10,6 +10,7 @@ public record AccountInfo(
     @Nullable String contractAccountId,
     boolean deleted,
     @NonNull PublicKey key,
+    String memo,
     long balance) {
   public static AccountInfo fromProto(final CryptoGetInfoResponse.AccountInfo proto) {
     return new AccountInfo(
@@ -17,6 +18,7 @@ public record AccountInfo(
         proto.getContractAccountID(),
         proto.getDeleted(),
         PublicKey.fromProto(proto.getKey()),
+        proto.getMemo(),
         proto.getBalance());
   }
 }

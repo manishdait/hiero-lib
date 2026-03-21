@@ -4,6 +4,7 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
 import io.github.manishdait.sdk.account.AccountCreateTransaction;
 import io.github.manishdait.sdk.key.PrivateKey;
+import io.github.manishdait.sdk.query.AccountInfoQuery;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -20,6 +21,7 @@ public class AccountCreateTransactionIntegrationTest {
     var tx =
         new AccountCreateTransaction()
             .withKey(PrivateKey.generate())
+            .withAccountMemo("sdk:integration:test")
             .withInitialBalance(Hbar.of(1))
             .pack(client);
 
